@@ -70,5 +70,5 @@ let value: u64 = builder.query(None, result_key, &vec![])
             .to_owned()
             .into_t()
             .expect("must convert the CLValue into a u64");
-assert_eq!(400, value);
+assert_eq!(1000, value);
 }
