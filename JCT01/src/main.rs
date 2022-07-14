@@ -17,7 +17,7 @@ use core::convert::TryInto;
 use casper_types::{
     contracts::NamedKeys, runtime_args, CLType, CLValue, ContractHash, ContractPackageHash,
     ContractVersion, EntryPoint, EntryPointAccess, EntryPointType, EntryPoints, Key, KeyTag,
-    Parameter, RuntimeArgs, Tagged, URef, account::AccountHash
+    Parameter, RuntimeArgs, Tagged, URef, account::AccountHash, ApiError
 };
 
 use casper_contract::{
@@ -72,7 +72,6 @@ pub extern "C" fn balanceOf(){
     let caller_account_key: AccountHash = runtime::get_caller();
     let caller_account_key_as_string = caller_account_key.to_string();
     let balances_uref = get_uref("token_balances");
-
     let _balance = storage::dictionary_get::<u64>(balances_uref, &caller_account_key_as_string);
     match _balance{
         Ok(maybe_balance) => {
@@ -101,11 +100,21 @@ pub extern "C" fn call(){
     // initialize token
     storage::new_dictionary("token_balances");
     // currently not used for testing.
-    let Token_Total_Supply: u64 = 10_000_000;
-    runtime::put_key(
-        "total_supply",
-        storage::new_uref(Token_Total_Supply).into()
-    );
+
+    runtime::put_key("circulating_supply", storage::new_uref("circulating_supply").into());
+
+    let circulating_supply_uref = get_uref("circulating_supply");
+    let circulating_supply: u64 = 1000;
+    
+    
+    storage::write(circulating_supply_uref, circulating_supply);
+    let circ_supply: u64 = storage::read_or_revert(circulating_supply_uref);
+
+    let compare_to = 20;
+    if circ_supply != compare_to{
+        runtime::revert(ApiError::PermissionDenied)
+    }
+    
 
     // call dummy mint function
     mint();
@@ -114,4 +123,3 @@ pub extern "C" fn call(){
     mint();
     balanceOf()
 }
-
