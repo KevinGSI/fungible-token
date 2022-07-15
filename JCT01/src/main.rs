@@ -1,6 +1,29 @@
 #![no_std]
 #![no_main]
 
+// TBD
+/*
+    "EARLY GAME"
+
+Refactor code / return values for testnet & use casper-client to test currently existing functions,
+
+Restrict mint access to admin address.
+Make use of constants.rs,
+move some stuff to utils.rs
+
+    "MID GAME"
+
+call init function to deploy a new contract,
+extract further, more complex methods and structure from the CEP token standard.
+
+    "LATE GAME"
+
+build a client in javascript, using the SDK,
+try to deploy multiple tokens and code swap logic,
+
+
+
+*/
 mod constants;
 mod utils;
 extern crate alloc;
@@ -148,7 +171,7 @@ pub extern "C" fn balanceOf() {
 pub extern "C" fn call() {
     // Constants for testing:
     let amount_mints: u64 = 10; // given a max supply of 1000 and a mint_amount of 100, 10 is the maximum possible.
-                               // any value above 10 will cause a revert with a PermissionDenied error.
+                                // any value above 10 will cause a revert with a PermissionDenied error.
 
     // initialize token -> later to be moved to an initialization function.
     storage::new_dictionary("token_balances");
