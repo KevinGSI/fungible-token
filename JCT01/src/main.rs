@@ -34,6 +34,37 @@ use utils::*;
 // Jonas ERC20 token on Casper
 
 #[no_mangle]
+pub extern "C" fn Balance(
+    caller_account_key: AccountHash,
+    caller_account_key_as_string: &str,
+) -> u64 {
+    let balances_uref = get_uref("token_balances");
+    let _balance = storage::dictionary_get::<u64>(balances_uref, &caller_account_key_as_string);
+
+    let mut __balance: u64 = 0;
+    match _balance {
+        Ok(maybe_balance) => {
+            match maybe_balance {
+                Some(balance) => {
+                    // Update __balance in outer scope
+                    __balance = balance;
+                }
+                // This should never happen.
+                None => {
+                    // account not found, not received tokens => balance is 0.
+                    __balance = 0;
+                }
+            }
+        }
+        Err(_) => {
+            // This should never happen, could happen if initialization failed.
+            runtime::revert(ApiError::Unhandled)
+        }
+    }
+    __balance
+}
+
+#[no_mangle]
 pub extern "C" fn mint() {
     let circulating_supply_uref: URef = get_uref("circulating_supply");
     let circulating_supply: u64 = storage::read_or_revert(circulating_supply_uref);
@@ -45,82 +76,21 @@ pub extern "C" fn mint() {
     let caller_account_key_as_string = caller_account_key.to_string();
     let balances_uref = get_uref("token_balances");
 
+    // Is the max_supply exceeded by this mint ? - if so, revert.
     if circulating_supply + mint_amount > max_total_supply {
         runtime::revert(ApiError::PermissionDenied)
     }
 
-    let caller_current_balance =
-        storage::dictionary_get::<u64>(balances_uref, &caller_account_key_as_string);
-    match caller_current_balance {
-        Ok(maybe_balance_before_mint) => {
-            match maybe_balance_before_mint {
-                Some(balance_before_mint) => {
-                    let updated_balance: u64 = balance_before_mint + mint_amount;
-                    storage::dictionary_put(
-                        balances_uref,
-                        &caller_account_key_as_string,
-                        updated_balance,
-                    );
-                    // Update circulating_supply, as coins have been minted.
-                    let updated_circulating_supply: u64 = circulating_supply + mint_amount;
-                    storage::write(circulating_supply_uref, updated_circulating_supply);
-                }
-                // No entry ( yet ) => create entry and set mint_amount as balance.
-                None => {
-                    storage::dictionary_put(
-                        balances_uref,
-                        &caller_account_key_as_string,
-                        mint_amount,
-                    );
-                    // Update circulating_supply, as coins have been minted. => duplicate,
-                    // TBD: create an extra function in a future version.
-                    let updated_circulating_supply: u64 = circulating_supply + mint_amount;
-                    storage::write(circulating_supply_uref, updated_circulating_supply);
-                }
-            }
-        }
-        // This should never happen.
-        Err(_) => {
-            // this should never happen.
-            runtime::revert(ApiError::Unhandled)
-        }
-    }
-}
-
-#[no_mangle]
-pub extern "C" fn Balance(
-    caller_account_key: AccountHash,
-    caller_account_key_as_string: String,
-) -> u64 {
-    let balances_uref = get_uref("token_balances");
-    let _balance = storage::dictionary_get::<u64>(balances_uref, &caller_account_key_as_string);
-
-    let mut __balance: u64 = 0;
-    match _balance {
-        Ok(maybe_balance) => {
-            match maybe_balance {
-                Some(balance) => {
-                    __balance = balance;
-                    /*
-                    let balance_uref = storage::new_uref(balance);
-                    runtime::put_key("balance", balance_uref.into())*/
-                }
-                // This should never happen.
-                None => {
-                    // account not found, not received tokens => balance is 0.
-                    __balance = 0;
-                    /*
-                    let balance_uref = storage::new_uref(balance);
-                    runtime::put_key("balance", balance_uref.into())
-                    */
-                }
-            }
-        }
-        Err(_) => {
-            // This should never happen, could happen if initialization failed.
-        }
-    }
-    __balance
+    // Add mint_amount to account balance.
+    let balance_before_mint: u64 = Balance(caller_account_key, &caller_account_key_as_string);
+    let balance_after_mint: u64 = balance_before_mint + mint_amount;
+    storage::dictionary_put(
+        balances_uref,
+        &caller_account_key_as_string,
+        balance_after_mint,
+    );
+    let updated_circulating_supply: u64 = circulating_supply + mint_amount;
+    storage::write(circulating_supply_uref, updated_circulating_supply);
 }
 
 #[no_mangle]
@@ -128,7 +98,7 @@ pub extern "C" fn balanceOf() {
     let caller_account_key: AccountHash = runtime::get_caller();
     let caller_account_key_as_string = caller_account_key.to_string();
 
-    let __balance: u64 = Balance(caller_account_key, caller_account_key_as_string);
+    let __balance: u64 = Balance(caller_account_key, &caller_account_key_as_string);
     let balance_uref = storage::new_uref(__balance);
     runtime::put_key("balance", balance_uref.into())
 }
@@ -136,7 +106,7 @@ pub extern "C" fn balanceOf() {
 #[no_mangle]
 pub extern "C" fn call() {
     // Constants for testing:
-    let amount_mints: u64 = 10; // given a max supply of 1000 and a mint_amount of 100, 10 is the maximum possible.
+    let amount_mints: u64 = 11; // given a max supply of 1000 and a mint_amount of 100, 10 is the maximum possible.
                                 // any value above 10 will cause a revert with a PermissionDenied error.
 
     // initialize token
