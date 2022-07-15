@@ -88,9 +88,10 @@ pub extern "C" fn mint() {
 }
 
 #[no_mangle]
-pub extern "C" fn balanceOf() {
-    let caller_account_key: AccountHash = runtime::get_caller();
-    let caller_account_key_as_string = caller_account_key.to_string();
+pub extern "C" fn Balance(
+    caller_account_key: AccountHash,
+    caller_account_key_as_string: String,
+) -> u64 {
     let balances_uref = get_uref("token_balances");
     let _balance = storage::dictionary_get::<u64>(balances_uref, &caller_account_key_as_string);
 
@@ -119,7 +120,15 @@ pub extern "C" fn balanceOf() {
             // This should never happen, could happen if initialization failed.
         }
     }
+    __balance
+}
 
+#[no_mangle]
+pub extern "C" fn balanceOf() {
+    let caller_account_key: AccountHash = runtime::get_caller();
+    let caller_account_key_as_string = caller_account_key.to_string();
+
+    let __balance: u64 = Balance(caller_account_key, caller_account_key_as_string);
     let balance_uref = storage::new_uref(__balance);
     runtime::put_key("balance", balance_uref.into())
 }
