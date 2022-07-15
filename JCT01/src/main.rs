@@ -93,19 +93,25 @@ pub extern "C" fn balanceOf() {
     let caller_account_key_as_string = caller_account_key.to_string();
     let balances_uref = get_uref("token_balances");
     let _balance = storage::dictionary_get::<u64>(balances_uref, &caller_account_key_as_string);
+
+    let mut __balance: u64 = 0;
     match _balance {
         Ok(maybe_balance) => {
             match maybe_balance {
                 Some(balance) => {
+                    __balance = balance;
+                    /*
                     let balance_uref = storage::new_uref(balance);
-                    runtime::put_key("balance", balance_uref.into())
+                    runtime::put_key("balance", balance_uref.into())*/
                 }
                 // This should never happen.
                 None => {
                     // account not found, not received tokens => balance is 0.
-                    let balance: u64 = 0;
+                    __balance = 0;
+                    /*
                     let balance_uref = storage::new_uref(balance);
                     runtime::put_key("balance", balance_uref.into())
+                    */
                 }
             }
         }
@@ -113,6 +119,9 @@ pub extern "C" fn balanceOf() {
             // This should never happen, could happen if initialization failed.
         }
     }
+
+    let balance_uref = storage::new_uref(__balance);
+    runtime::put_key("balance", balance_uref.into())
 }
 
 #[no_mangle]
