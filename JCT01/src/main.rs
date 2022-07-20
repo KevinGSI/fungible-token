@@ -85,6 +85,7 @@ pub extern "C" fn Balance(
         }
     }
     __balance
+    // u64
 }
 
 #[no_mangle]
@@ -125,6 +126,7 @@ pub extern "C" fn mint() {
     // put key in runtime for testing.
     // In production this would probably be replaced by a return value.
     runtime::put_key("balance_after_mint", balance_after_mint_uref.into());
+    // nothing
 }
 
 pub extern "C" fn burn() {
@@ -155,16 +157,19 @@ pub extern "C" fn burn() {
     );
 
     storage::write(circulating_supply_uref, updated_circulating_supply);
+    // nothing
 }
 
 #[no_mangle]
-pub extern "C" fn balanceOf() {
+pub extern "C" fn balanceOf() -> u64 {
     let caller_account_key: AccountHash = runtime::get_caller();
     let caller_account_key_as_string = caller_account_key.to_string();
 
     let __balance: u64 = Balance(caller_account_key, &caller_account_key_as_string);
-    let balance_uref = storage::new_uref(__balance);
-    runtime::put_key("balance", balance_uref.into())
+    // let balance_uref = storage::new_uref(__balance);
+    // runtime::put_key("balance", balance_uref.into());
+    __balance
+    // u64
 }
 
 #[no_mangle]
@@ -192,9 +197,59 @@ pub extern "C" fn call() {
     // now the token is initialized.
 
     // actions taken for testing.
+    /*
     for i in (0..amount_mints) {
         mint();
         burn();
     }
     balanceOf()
+    */
+
+    // Entry Points ( for testing ) => to be moved to init function in the future
+    let entry_points = {
+        // Define and assign entry points for this smart contract
+        let mut entry_points = EntryPoints::new();
+        let mint = EntryPoint::new(
+            "mint",
+            vec![],
+            CLType::Unit,
+            EntryPointAccess::Public,
+            EntryPointType::Contract,
+        );
+
+        let balance = EntryPoint::new(
+            "balanceOf",
+            vec![],
+            CLType::U64,
+            EntryPointAccess::Public,
+            EntryPointType::Contract,
+        );
+
+        let burn = EntryPoint::new(
+            "burn",
+            vec![],
+            CLType::Unit,
+            EntryPointAccess::Public,
+            EntryPointType::Contract,
+        );
+
+        entry_points.add_entry_point(mint);
+        entry_points.add_entry_point(balance);
+        entry_points.add_entry_point(burn);
+
+        entry_points
+    };
+
+    let named_keys = {
+        let mut named_keys = NamedKeys::new();
+        named_keys.insert("installer".to_string(), runtime::get_caller().into());
+        named_keys
+    };
+
+    storage::new_contract(
+        entry_points,
+        Some(named_keys),
+        Some("hash_key".to_string()),
+        Some("access_key".to_string()),
+    );
 }
