@@ -68,6 +68,14 @@ pub extern "C" fn Balance(
 // account owner should be changed to a contract_hash
 pub extern "C" fn updateOwner() {
     // update owner account
+    let caller_account_hash: AccountHash = runtime::get_caller();
+    let caller_account_hash_as_string = caller_account_hash.to_string();
+    let owner_account_uref: URef = get_uref("owner_account");
+    let owner_account: AccountHash = storage::read_or_revert(owner_account_uref);
+    if caller_account_hash != owner_account {
+        // only the owner is allowed to mint.
+        runtime::revert(ApiError::PermissionDenied);
+    }
 }
 
 #[no_mangle]
@@ -132,7 +140,7 @@ pub extern "C" fn burn() {
 
     let balance_before_burn: u64 = Balance(caller_account_hash, &caller_account_hash_as_string);
     if balance_before_burn < burn_amount {
-        runtime::revert(ApiError::None)
+        runtime::revert(ApiError::InvalidArgument)
     }
     let balance_after_burn: u64 = balance_before_burn - burn_amount;
     let updated_circulating_supply: u64 = circulating_supply - burn_amount;
@@ -154,18 +162,14 @@ pub extern "C" fn balanceOf() -> u64 {
     let caller_account_hash_as_string = caller_account_hash.to_string();
 
     let __balance: u64 = Balance(caller_account_hash, &caller_account_hash_as_string);
-    // let balance_uref = storage::new_uref(__balance);
-    // runtime::put_key("balance", balance_uref.into());
+    let balance_uref = storage::new_uref(__balance);
+    runtime::put_key("balance", balance_uref.into());
     __balance
     // u64
 }
 
 #[no_mangle]
 pub extern "C" fn call() {
-    // Constants for testing:
-    let amount_mints: u64 = 10; // given a max supply of 1000 and a mint_amount of 100, 10 is the maximum possible.
-                                // any value above 10 will cause a revert with a PermissionDenied error.
-
     // initialize token -> later to be moved to an initialization function.
     storage::new_dictionary("token_balances");
 
@@ -251,4 +255,7 @@ pub extern "C" fn call() {
         Some("hash_key".to_string()),
         Some("access_key".to_string()),
     );
+    mint();
+    burn();
+    balanceOf();
 }

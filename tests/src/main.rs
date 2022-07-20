@@ -54,10 +54,10 @@ fn _test() {
         .get_account(*DEFAULT_ACCOUNT_ADDR)
         .expect("the default account must be present")
         .named_keys()
-        .get("owner_account")
+        .get("balance")
         .expect("must have key as part of session code execution");
 
-    let value: AccountHash = builder
+    let value: u64 = builder
         .query(None, result_key, &vec![])
         .expect("must have the stored value")
         .as_cl_value()
@@ -68,7 +68,7 @@ fn _test() {
     //assert_eq!(1000, value);
     println!("{}", "------------------------");
 
-    println!("Owner Account Key: {:?}", result_key);
+    println!("Balance Key: {:?}", result_key);
     println!("Value at Key: {:?}", value);
 
     println!("{}", "------------------------");
