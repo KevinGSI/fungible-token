@@ -34,11 +34,11 @@ use utils::*;
 
 #[no_mangle]
 pub extern "C" fn Balance(
-    caller_account_key: AccountHash,
-    caller_account_key_as_string: &str,
+    caller_account_hash: AccountHash,
+    caller_account_hash_as_string: &str,
 ) -> u64 {
     let balances_uref = get_uref("token_balances");
-    let _balance = storage::dictionary_get::<u64>(balances_uref, &caller_account_key_as_string);
+    let _balance = storage::dictionary_get::<u64>(balances_uref, &caller_account_hash_as_string);
 
     let mut __balance: u64 = 0;
     match _balance {
@@ -65,11 +65,22 @@ pub extern "C" fn Balance(
 }
 
 #[no_mangle]
+// account owner should be changed to a contract_hash
+pub extern "C" fn updateOwner() {
+    // update owner account
+}
+
+#[no_mangle]
 pub extern "C" fn mint() {
     // Account
-    let caller_account_key: AccountHash = runtime::get_caller();
-    let caller_account_key_as_string = caller_account_key.to_string();
-
+    let caller_account_hash: AccountHash = runtime::get_caller();
+    let caller_account_hash_as_string = caller_account_hash.to_string();
+    let owner_account_uref: URef = get_uref("owner_account");
+    let owner_account: AccountHash = storage::read_or_revert(owner_account_uref);
+    if caller_account_hash != owner_account {
+        // only the owner is allowed to mint.
+        runtime::revert(ApiError::PermissionDenied);
+    }
     // to be done: add permissions so that only the owner can mint.
     let circulating_supply_uref: URef = get_uref("circulating_supply");
     let circulating_supply: u64 = storage::read_or_revert(circulating_supply_uref);
@@ -85,14 +96,14 @@ pub extern "C" fn mint() {
     }
 
     // Add mint_amount to account balance.
-    let balance_before_mint: u64 = Balance(caller_account_key, &caller_account_key_as_string);
+    let balance_before_mint: u64 = Balance(caller_account_hash, &caller_account_hash_as_string);
     let balance_after_mint: u64 = balance_before_mint + mint_amount;
 
     // First update Balance to prevent multiple execution attacks
     // TBD: make an external function to update balances / overwrite keys in dicts.
     storage::dictionary_put(
         balances_uref,
-        &caller_account_key_as_string,
+        &caller_account_hash_as_string,
         balance_after_mint,
     );
 
@@ -108,8 +119,8 @@ pub extern "C" fn mint() {
 #[no_mangle]
 pub extern "C" fn burn() {
     // Account
-    let caller_account_key: AccountHash = runtime::get_caller();
-    let caller_account_key_as_string = caller_account_key.to_string();
+    let caller_account_hash: AccountHash = runtime::get_caller();
+    let caller_account_hash_as_string = caller_account_hash.to_string();
 
     let circulating_supply_uref: URef = get_uref("circulating_supply");
     let circulating_supply: u64 = storage::read_or_revert(circulating_supply_uref);
@@ -119,7 +130,7 @@ pub extern "C" fn burn() {
     let burn_amount: u64 = 25; // burn 25 tokens
     let balances_uref = get_uref("token_balances");
 
-    let balance_before_burn: u64 = Balance(caller_account_key, &caller_account_key_as_string);
+    let balance_before_burn: u64 = Balance(caller_account_hash, &caller_account_hash_as_string);
     if balance_before_burn < burn_amount {
         runtime::revert(ApiError::None)
     }
@@ -129,20 +140,20 @@ pub extern "C" fn burn() {
     // Update Balance first to prevent multiple execution attacks.
     storage::dictionary_put(
         balances_uref,
-        &caller_account_key_as_string,
+        &caller_account_hash_as_string,
         balance_after_burn,
     );
-
+    // now decrease circulating_supply
     storage::write(circulating_supply_uref, updated_circulating_supply);
     // nothing
 }
 
 #[no_mangle]
 pub extern "C" fn balanceOf() -> u64 {
-    let caller_account_key: AccountHash = runtime::get_caller();
-    let caller_account_key_as_string = caller_account_key.to_string();
+    let caller_account_hash: AccountHash = runtime::get_caller();
+    let caller_account_hash_as_string = caller_account_hash.to_string();
 
-    let __balance: u64 = Balance(caller_account_key, &caller_account_key_as_string);
+    let __balance: u64 = Balance(caller_account_hash, &caller_account_hash_as_string);
     // let balance_uref = storage::new_uref(__balance);
     // runtime::put_key("balance", balance_uref.into());
     __balance
