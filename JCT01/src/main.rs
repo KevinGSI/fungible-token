@@ -1,29 +1,5 @@
 #![no_std]
 #![no_main]
-
-// TBD
-/*
-    "EARLY GAME"
-
-Refactor code / return values for testnet & use casper-client to test currently existing functions,
-
-Restrict mint access to admin address.
-Make use of constants.rs,
-move some stuff to utils.rs
-
-    "MID GAME"
-
-call init function to deploy a new contract,
-extract further, more complex methods and structure from the CEP token standard.
-
-    "LATE GAME"
-
-build a client in javascript, using the SDK,
-try to deploy multiple tokens and code swap logic,
-
-
-
-*/
 mod constants;
 mod utils;
 extern crate alloc;
@@ -129,6 +105,7 @@ pub extern "C" fn mint() {
     // nothing
 }
 
+#[no_mangle]
 pub extern "C" fn burn() {
     // Account
     let caller_account_key: AccountHash = runtime::get_caller();
@@ -180,13 +157,23 @@ pub extern "C" fn call() {
 
     // initialize token -> later to be moved to an initialization function.
     storage::new_dictionary("token_balances");
+
+    // write to runtime for testing.
+    let owner_account = runtime::get_caller();
+    runtime::put_key("owner_account", storage::new_uref(owner_account).into());
+    // write to storage for deploy.
+    let owner_account_uref: URef = get_uref("owner_account");
+    storage::write(owner_account_uref, owner_account);
+
+    let circulating_supply: u64 = 0;
     runtime::put_key(
         "circulating_supply",
-        storage::new_uref("circulating_supply").into(),
+        storage::new_uref(circulating_supply).into(),
     );
     let circulating_supply_uref: URef = get_uref("circulating_supply");
     let circulating_supply: u64 = 0;
     storage::write(circulating_supply_uref, circulating_supply);
+
     runtime::put_key(
         "max_total_supply",
         storage::new_uref("max_total_supply").into(),
@@ -195,7 +182,8 @@ pub extern "C" fn call() {
     let max_total_supply: u64 = 1000;
     storage::write(max_total_supply_uref, max_total_supply);
     // now the token is initialized.
-
+    let balance: u64 = 10;
+    runtime::put_key("balance", storage::new_uref(balance).into());
     // actions taken for testing.
     /*
     for i in (0..amount_mints) {
