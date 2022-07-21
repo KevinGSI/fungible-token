@@ -33,12 +33,16 @@ use utils::*;
 // Jonas ERC20 token on Casper
 
 #[no_mangle]
-pub extern "C" fn Balance(
-    caller_account_hash: AccountHash,
-    caller_account_hash_as_string: &str,
-) -> u64 {
-    let balances_uref = get_uref("token_balances");
-    let _balance = storage::dictionary_get::<u64>(balances_uref, &caller_account_hash_as_string);
+fn Balance(caller_account_hash: AccountHash, caller_account_hash_as_string: &str) -> u64 {
+    let balances_key: Key = match runtime::get_key("balances") {
+        Some(key) => key,
+        None => runtime::revert(ApiError::MissingKey),
+    };
+
+    let _balance = storage::dictionary_get::<u64>(
+        balances_key.into_uref().unwrap_or_revert(),
+        &caller_account_hash_as_string,
+    );
 
     let mut __balance: u64 = 0;
     match _balance {
@@ -60,6 +64,7 @@ pub extern "C" fn Balance(
             runtime::revert(ApiError::Unhandled)
         }
     }
+
     __balance
     // u64
 }
@@ -68,6 +73,8 @@ pub extern "C" fn Balance(
 // account owner should be changed to a contract_hash
 pub extern "C" fn updateOwner() {
     // update owner account
+    let updated_owner_account: AccountHash = runtime::get_named_arg("updated_owner_account");
+
     let caller_account_hash: AccountHash = runtime::get_caller();
     let caller_account_hash_as_string = caller_account_hash.to_string();
     let owner_account_uref: URef = get_uref("owner_account");
@@ -76,8 +83,10 @@ pub extern "C" fn updateOwner() {
         // only the owner is allowed to mint.
         runtime::revert(ApiError::PermissionDenied);
     }
+    storage::write(owner_account_uref, updated_owner_account);
 }
 
+// Fully functional.
 #[no_mangle]
 pub extern "C" fn mint() {
     // Account
@@ -117,13 +126,9 @@ pub extern "C" fn mint() {
 
     let updated_circulating_supply: u64 = circulating_supply + mint_amount;
     storage::write(circulating_supply_uref, updated_circulating_supply);
-    let balance_after_mint_uref = storage::new_uref(balance_after_mint);
-    // put key in runtime for testing.
-    // In production this would probably be replaced by a return value.
-    runtime::put_key("balance_after_mint", balance_after_mint_uref.into());
-    // nothing
 }
 
+// Fully functional.
 #[no_mangle]
 pub extern "C" fn burn() {
     // Account
@@ -160,45 +165,36 @@ pub extern "C" fn burn() {
 pub extern "C" fn balanceOf() -> u64 {
     let caller_account_hash: AccountHash = runtime::get_caller();
     let caller_account_hash_as_string = caller_account_hash.to_string();
+    let _balance: u64 = Balance(caller_account_hash, &caller_account_hash_as_string);
+    runtime::ret(CLValue::from_t(_balance).unwrap_or_revert());
+    /*
 
-    let __balance: u64 = Balance(caller_account_hash, &caller_account_hash_as_string);
-    let balance_uref = storage::new_uref(__balance);
-    runtime::put_key("balance", balance_uref.into());
-    __balance
+    #[no_mangle]
+    pub extern "C" fn get_item() {
+        let name: String = runtime::get_named_arg("name");
+
+        let value = get_item_private(name.as_str());
+
+        runtime::ret(CLValue::from_t(value).unwrap_or_revert());
+    }
+
+    */
     // u64
 }
 
 #[no_mangle]
 pub extern "C" fn call() {
     // initialize token -> later to be moved to an initialization function.
-    storage::new_dictionary("token_balances");
-
-    // write to runtime for testing.
     let owner_account = runtime::get_caller();
-    runtime::put_key("owner_account", storage::new_uref(owner_account).into());
-    // write to storage for deploy.
-    let owner_account_uref: URef = get_uref("owner_account");
-    storage::write(owner_account_uref, owner_account);
+    storage::write(storage::new_uref("owner_account"), owner_account);
 
     let circulating_supply: u64 = 0;
-    runtime::put_key(
-        "circulating_supply",
-        storage::new_uref(circulating_supply).into(),
-    );
-    let circulating_supply_uref: URef = get_uref("circulating_supply");
-    let circulating_supply: u64 = 0;
-    storage::write(circulating_supply_uref, circulating_supply);
+    storage::write(storage::new_uref("circulating_supply"), circulating_supply);
 
-    runtime::put_key(
-        "max_total_supply",
-        storage::new_uref("max_total_supply").into(),
-    );
-    let max_total_supply_uref: URef = get_uref("max_total_supply");
     let max_total_supply: u64 = 1000;
-    storage::write(max_total_supply_uref, max_total_supply);
+    storage::write(storage::new_uref("max_total_supply"), max_total_supply);
+
     // now the token is initialized.
-    let balance: u64 = 10;
-    runtime::put_key("balance", storage::new_uref(balance).into());
     // actions taken for testing.
     /*
     for i in (0..amount_mints) {
@@ -208,6 +204,14 @@ pub extern "C" fn call() {
     balanceOf()
     */
 
+    /*
+    let balances_dict: String = storage::new_dictionary("token_balances")
+        .unwrap_or_revert()
+        .to_string();
+    runtime::put_key("token_balances", storage::new_uref(balances_dict).into());
+    */
+
+    
     // Entry Points ( for testing ) => to be moved to init function in the future
     let entry_points = {
         // Define and assign entry points for this smart contract
@@ -236,9 +240,19 @@ pub extern "C" fn call() {
             EntryPointType::Contract,
         );
 
+        let updateOwner = EntryPoint::new(
+            "updateOwner",
+            // AccountHash should be type any and then parsed as account hash
+            vec![Parameter::new("updated_owner_account", CLType::Any)], // not sure if this type is correct.
+            CLType::Unit,
+            EntryPointAccess::Public,
+            EntryPointType::Contract,
+        );
+
         entry_points.add_entry_point(mint);
         entry_points.add_entry_point(balance);
         entry_points.add_entry_point(burn);
+        entry_points.add_entry_point(updateOwner);
 
         entry_points
     };
@@ -246,16 +260,17 @@ pub extern "C" fn call() {
     let named_keys = {
         let mut named_keys = NamedKeys::new();
         named_keys.insert("installer".to_string(), runtime::get_caller().into());
+
+        let balances_dict = storage::new_dictionary("token").unwrap_or_revert();
+        named_keys.insert("token".to_string(), balances_dict.into());
+
         named_keys
     };
 
     storage::new_contract(
         entry_points,
         Some(named_keys),
-        Some("hash_key".to_string()),
+        Some("JCT_0012".to_string()),
         Some("access_key".to_string()),
     );
-    mint();
-    burn();
-    balanceOf();
 }

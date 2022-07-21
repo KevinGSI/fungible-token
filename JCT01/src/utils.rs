@@ -26,12 +26,12 @@ use casper_types::{
     ApiError, CLType, CLTyped, ContractHash, Key, URef,
 };
 
-pub(crate) fn get_uref(name: &str) -> URef{
+pub(crate) fn get_uref(name: &str) -> URef {
     let key = get_key(name);
     key.into_uref().unwrap_or_revert()
 }
 
-pub(crate) fn get_key(name: &str) -> Key{
+pub(crate) fn get_key(name: &str) -> Key {
     let (name_ptr, name_size, _bytes) = to_ptr(name);
     let mut key_bytes = vec![0u8; Key::max_serialized_length()];
     let mut total_bytes: usize = 0;
