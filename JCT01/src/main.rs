@@ -186,6 +186,7 @@ pub extern "C" fn burn() {
 }
 */
 #[no_mangle]
+// this can only be called by another contract and does not return a value to the cli.
 pub extern "C" fn balanceOf() -> u64 {
     let caller_account_hash: AccountHash = runtime::get_caller();
     let caller_account_hash_as_string = caller_account_hash.to_string();
