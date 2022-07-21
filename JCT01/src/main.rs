@@ -69,6 +69,7 @@ fn Balance(caller_account_hash: AccountHash, caller_account_hash_as_string: &str
     // u64
 }
 
+/* ON HOLD FOR STORAGE TESTING
 #[no_mangle]
 // account owner should be changed to a contract_hash
 pub extern "C" fn updateOwner() {
@@ -85,6 +86,7 @@ pub extern "C" fn updateOwner() {
     }
     storage::write(owner_account_uref, updated_owner_account);
 }
+*/
 
 // Fully functional.
 #[no_mangle]
@@ -92,26 +94,49 @@ pub extern "C" fn mint() {
     // Account
     let caller_account_hash: AccountHash = runtime::get_caller();
     let caller_account_hash_as_string = caller_account_hash.to_string();
-    let owner_account_uref: URef = get_uref("owner_account");
-    let owner_account: AccountHash = storage::read_or_revert(owner_account_uref);
-    if caller_account_hash != owner_account {
-        // only the owner is allowed to mint.
-        runtime::revert(ApiError::PermissionDenied);
-    }
+
+    // TO BE ADDED: OWNER VALIDATION CHECK
+
     // to be done: add permissions so that only the owner can mint.
-    let circulating_supply_uref: URef = get_uref("circulating_supply");
+
+    // CIRCULATING SUPPLY
+    let circulating_supply_uref: URef = match runtime::get_key("circsupp") {
+        Some(uref) => uref,
+        None => runtime::revert(ApiError::MissingKey),
+    }
+    .into_uref()
+    .unwrap_or_revert();
     let circulating_supply: u64 = storage::read_or_revert(circulating_supply_uref);
-    let max_total_supply_uref: URef = get_uref("max_total_supply");
+
+    // TOTAL SUPPLY
+    let max_total_supply_uref: URef = match runtime::get_key("maxtotsupp") {
+        Some(uref) => uref,
+        None => runtime::revert(ApiError::MissingKey),
+    }
+    .into_uref()
+    .unwrap_or_revert();
     let max_total_supply: u64 = storage::read_or_revert(max_total_supply_uref);
 
+    // MINT AMOUNT
     let mint_amount: u64 = 100;
-    let balances_uref = get_uref("token_balances");
 
     // Is the max_supply exceeded by this mint ? - if so, revert.
     if circulating_supply + mint_amount > max_total_supply {
         runtime::revert(ApiError::PermissionDenied)
     }
 
+    // BALANCE
+
+    /* ON HOLD FOR STORAGE TEST
+    let balances_key: Key = match runtime::get_key("balances") {
+        Some(key) => key,
+        None => runtime::revert(ApiError::MissingKey),
+    };
+    let balances_uref: URef = balances_key.into_uref().unwrap_or_revert();
+    /*let _balance = storage::dictionary_get::<u64>(
+        balances_key.into_uref().unwrap_or_revert(),
+        &caller_account_hash_as_string,
+    );*/
     // Add mint_amount to account balance.
     let balance_before_mint: u64 = Balance(caller_account_hash, &caller_account_hash_as_string);
     let balance_after_mint: u64 = balance_before_mint + mint_amount;
@@ -126,6 +151,7 @@ pub extern "C" fn mint() {
 
     let updated_circulating_supply: u64 = circulating_supply + mint_amount;
     storage::write(circulating_supply_uref, updated_circulating_supply);
+    */
 }
 
 // Fully functional.
@@ -141,7 +167,7 @@ pub extern "C" fn burn() {
     let max_total_supply: u64 = storage::read_or_revert(max_total_supply_uref);
     // To be parsed as a runtime arg later.
     let burn_amount: u64 = 25; // burn 25 tokens
-    let balances_uref = get_uref("token_balances");
+    let balances_uref = get_uref("balances");
 
     let balance_before_burn: u64 = Balance(caller_account_hash, &caller_account_hash_as_string);
     if balance_before_burn < burn_amount {
@@ -167,51 +193,13 @@ pub extern "C" fn balanceOf() -> u64 {
     let caller_account_hash_as_string = caller_account_hash.to_string();
     let _balance: u64 = Balance(caller_account_hash, &caller_account_hash_as_string);
     runtime::ret(CLValue::from_t(_balance).unwrap_or_revert());
-    /*
-
-    #[no_mangle]
-    pub extern "C" fn get_item() {
-        let name: String = runtime::get_named_arg("name");
-
-        let value = get_item_private(name.as_str());
-
-        runtime::ret(CLValue::from_t(value).unwrap_or_revert());
-    }
-
-    */
     // u64
 }
 
 #[no_mangle]
 pub extern "C" fn call() {
     // initialize token -> later to be moved to an initialization function.
-    let owner_account = runtime::get_caller();
-    storage::write(storage::new_uref("owner_account"), owner_account);
 
-    let circulating_supply: u64 = 0;
-    storage::write(storage::new_uref("circulating_supply"), circulating_supply);
-
-    let max_total_supply: u64 = 1000;
-    storage::write(storage::new_uref("max_total_supply"), max_total_supply);
-
-    // now the token is initialized.
-    // actions taken for testing.
-    /*
-    for i in (0..amount_mints) {
-        mint();
-        burn();
-    }
-    balanceOf()
-    */
-
-    /*
-    let balances_dict: String = storage::new_dictionary("token_balances")
-        .unwrap_or_revert()
-        .to_string();
-    runtime::put_key("token_balances", storage::new_uref(balances_dict).into());
-    */
-
-    
     // Entry Points ( for testing ) => to be moved to init function in the future
     let entry_points = {
         // Define and assign entry points for this smart contract
@@ -261,8 +249,18 @@ pub extern "C" fn call() {
         let mut named_keys = NamedKeys::new();
         named_keys.insert("installer".to_string(), runtime::get_caller().into());
 
-        let balances_dict = storage::new_dictionary("token").unwrap_or_revert();
-        named_keys.insert("token".to_string(), balances_dict.into());
+        let balances_dict = storage::new_dictionary("balances").unwrap_or_revert();
+        named_keys.insert("balances".to_string(), balances_dict.into());
+
+        let circulating_supply = storage::new_uref("circsupp");
+        named_keys.insert("circsupp".to_string(), circulating_supply.into());
+        let circulating_supply_value: u64 = 0;
+        storage::write(circulating_supply, circulating_supply_value);
+
+        let max_total_supply = storage::new_uref("maxtotsupp");
+        named_keys.insert("maxtotsupp".to_string(), max_total_supply.into());
+        let max_total_supply_value = 1000000;
+        storage::write(max_total_supply, max_total_supply_value);
 
         named_keys
     };
@@ -270,7 +268,7 @@ pub extern "C" fn call() {
     storage::new_contract(
         entry_points,
         Some(named_keys),
-        Some("JCT_0012".to_string()),
+        Some("JCT_m_v.0.0.1".to_string()),
         Some("access_key".to_string()),
     );
 }
