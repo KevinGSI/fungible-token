@@ -34,7 +34,7 @@ use utils::*;
 
 #[no_mangle]
 fn Balance(caller_account_hash: AccountHash, caller_account_hash_as_string: &str) -> u64 {
-    let balances_key: Key = match runtime::get_key("balances") {
+    let balances_key: Key = match runtime::get_key("holdings") {
         Some(key) => key,
         None => runtime::revert(ApiError::MissingKey),
     };
@@ -100,7 +100,7 @@ pub extern "C" fn mint() {
     // to be done: add permissions so that only the owner can mint.
 
     // CIRCULATING SUPPLY
-    let circulating_supply_uref: URef = match runtime::get_key("circsupp") {
+    let circulating_supply_uref: URef = match runtime::get_key("circ") {
         Some(uref) => uref,
         None => runtime::revert(ApiError::MissingKey),
     }
@@ -109,7 +109,7 @@ pub extern "C" fn mint() {
     let circulating_supply: u64 = storage::read_or_revert(circulating_supply_uref);
 
     // TOTAL SUPPLY
-    let max_total_supply_uref: URef = match runtime::get_key("maxtotsupp") {
+    let max_total_supply_uref: URef = match runtime::get_key("maxsupp") {
         Some(uref) => uref,
         None => runtime::revert(ApiError::MissingKey),
     }
@@ -127,8 +127,7 @@ pub extern "C" fn mint() {
 
     // BALANCE
 
-    /* ON HOLD FOR STORAGE TEST
-    let balances_key: Key = match runtime::get_key("balances") {
+    let balances_key: Key = match runtime::get_key("holdings") {
         Some(key) => key,
         None => runtime::revert(ApiError::MissingKey),
     };
@@ -151,11 +150,10 @@ pub extern "C" fn mint() {
 
     let updated_circulating_supply: u64 = circulating_supply + mint_amount;
     storage::write(circulating_supply_uref, updated_circulating_supply);
-    */
 }
 
 // Fully functional.
-#[no_mangle]
+/*#[no_mangle]
 pub extern "C" fn burn() {
     // Account
     let caller_account_hash: AccountHash = runtime::get_caller();
@@ -167,7 +165,7 @@ pub extern "C" fn burn() {
     let max_total_supply: u64 = storage::read_or_revert(max_total_supply_uref);
     // To be parsed as a runtime arg later.
     let burn_amount: u64 = 25; // burn 25 tokens
-    let balances_uref = get_uref("balances");
+    let balances_uref = get_uref("holdings");
 
     let balance_before_burn: u64 = Balance(caller_account_hash, &caller_account_hash_as_string);
     if balance_before_burn < burn_amount {
@@ -186,7 +184,7 @@ pub extern "C" fn burn() {
     storage::write(circulating_supply_uref, updated_circulating_supply);
     // nothing
 }
-
+*/
 #[no_mangle]
 pub extern "C" fn balanceOf() -> u64 {
     let caller_account_hash: AccountHash = runtime::get_caller();
@@ -219,28 +217,28 @@ pub extern "C" fn call() {
             EntryPointAccess::Public,
             EntryPointType::Contract,
         );
+        /*
+                let burn = EntryPoint::new(
+                    "burn",
+                    vec![],
+                    CLType::Unit,
+                    EntryPointAccess::Public,
+                    EntryPointType::Contract,
+                );
 
-        let burn = EntryPoint::new(
-            "burn",
-            vec![],
-            CLType::Unit,
-            EntryPointAccess::Public,
-            EntryPointType::Contract,
-        );
-
-        let updateOwner = EntryPoint::new(
-            "updateOwner",
-            // AccountHash should be type any and then parsed as account hash
-            vec![Parameter::new("updated_owner_account", CLType::Any)], // not sure if this type is correct.
-            CLType::Unit,
-            EntryPointAccess::Public,
-            EntryPointType::Contract,
-        );
-
+                let updateOwner = EntryPoint::new(
+                    "updateOwner",
+                    // AccountHash should be type any and then parsed as account hash
+                    vec![Parameter::new("updated_owner_account", CLType::Any)], // not sure if this type is correct.
+                    CLType::Unit,
+                    EntryPointAccess::Public,
+                    EntryPointType::Contract,
+                );
+        */
         entry_points.add_entry_point(mint);
         entry_points.add_entry_point(balance);
-        entry_points.add_entry_point(burn);
-        entry_points.add_entry_point(updateOwner);
+        //entry_points.add_entry_point(burn);
+        //entry_points.add_entry_point(updateOwner);
 
         entry_points
     };
@@ -248,18 +246,18 @@ pub extern "C" fn call() {
     let named_keys = {
         let mut named_keys = NamedKeys::new();
         named_keys.insert("installer".to_string(), runtime::get_caller().into());
+        // Warning: if key exists on different contract, deploy will fail ? to be investigated.
+        let balances_dict = storage::new_dictionary("holdings").unwrap_or_revert();
+        named_keys.insert("holdings".to_string(), balances_dict.into());
 
-        let balances_dict = storage::new_dictionary("balances").unwrap_or_revert();
-        named_keys.insert("balances".to_string(), balances_dict.into());
-
-        let circulating_supply = storage::new_uref("circsupp");
-        named_keys.insert("circsupp".to_string(), circulating_supply.into());
+        let circulating_supply = storage::new_uref("circ");
+        named_keys.insert("circ".to_string(), circulating_supply.into());
         let circulating_supply_value: u64 = 0;
         storage::write(circulating_supply, circulating_supply_value);
 
-        let max_total_supply = storage::new_uref("maxtotsupp");
-        named_keys.insert("maxtotsupp".to_string(), max_total_supply.into());
-        let max_total_supply_value = 1000000;
+        let max_total_supply = storage::new_uref("maxsupp");
+        named_keys.insert("maxsupp".to_string(), max_total_supply.into());
+        let max_total_supply_value: u64 = 1000000;
         storage::write(max_total_supply, max_total_supply_value);
 
         named_keys
@@ -268,7 +266,7 @@ pub extern "C" fn call() {
     storage::new_contract(
         entry_points,
         Some(named_keys),
-        Some("JCT_m_v.0.0.1".to_string()),
+        Some("JCT_m_v.0.0.5".to_string()),
         Some("access_key".to_string()),
     );
 }
