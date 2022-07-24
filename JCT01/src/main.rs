@@ -69,24 +69,22 @@ fn Balance(caller_account_hash: AccountHash, caller_account_hash_as_string: &str
     // u64
 }
 
-/* ON HOLD FOR STORAGE TESTING
 #[no_mangle]
 // account owner should be changed to a contract_hash
 pub extern "C" fn updateOwner() {
-    // update owner account
-    let updated_owner_account: AccountHash = runtime::get_named_arg("updated_owner_account");
-
-    let caller_account_hash: AccountHash = runtime::get_caller();
-    let caller_account_hash_as_string = caller_account_hash.to_string();
-    let owner_account_uref: URef = get_uref("owner_account");
+    let new_owner: AccountHash = runtime::get_named_arg("new_owner");
+    let owner_account_uref: URef = match runtime::get_key("owner") {
+        Some(uref) => uref,
+        None => runtime::revert(ApiError::MissingKey),
+    }
+    .into_uref()
+    .unwrap_or_revert();
     let owner_account: AccountHash = storage::read_or_revert(owner_account_uref);
-    if caller_account_hash != owner_account {
-        // only the owner is allowed to mint.
+    if runtime::get_caller() != owner_account {
         runtime::revert(ApiError::PermissionDenied);
     }
-    storage::write(owner_account_uref, updated_owner_account);
+    storage::write(owner_account_uref, new_owner);
 }
-*/
 
 // Fully functional.
 #[no_mangle]
@@ -94,9 +92,19 @@ pub extern "C" fn mint() {
     // Account
     let caller_account_hash: AccountHash = runtime::get_caller();
     let caller_account_hash_as_string = caller_account_hash.to_string();
-
     // TO BE ADDED: OWNER VALIDATION CHECK
 
+    // Read current owner of the contract and revert if the caller isn't eligible to mint()
+    let owner_account_uref: URef = match runtime::get_key("owner") {
+        Some(uref) => uref,
+        None => runtime::revert(ApiError::MissingKey),
+    }
+    .into_uref()
+    .unwrap_or_revert();
+    let owner_account: AccountHash = storage::read_or_revert(owner_account_uref);
+    if runtime::get_caller() != owner_account {
+        runtime::revert(ApiError::PermissionDenied); // only owner account is eligible
+    }
     // to be done: add permissions so that only the owner can mint.
 
     // CIRCULATING SUPPLY
@@ -218,6 +226,16 @@ pub extern "C" fn call() {
             EntryPointAccess::Public,
             EntryPointType::Contract,
         );
+
+        let updateOwner = EntryPoint::new(
+            "updateOwner",
+            // AccountHash should be type any and then parsed as account hash
+            vec![Parameter::new("updated_owner_account", CLType::Any)], // not sure if this type is correct.
+            CLType::Unit,
+            EntryPointAccess::Public,
+            EntryPointType::Contract,
+        );
+
         /*
                 let burn = EntryPoint::new(
                     "burn",
@@ -227,19 +245,12 @@ pub extern "C" fn call() {
                     EntryPointType::Contract,
                 );
 
-                let updateOwner = EntryPoint::new(
-                    "updateOwner",
-                    // AccountHash should be type any and then parsed as account hash
-                    vec![Parameter::new("updated_owner_account", CLType::Any)], // not sure if this type is correct.
-                    CLType::Unit,
-                    EntryPointAccess::Public,
-                    EntryPointType::Contract,
-                );
         */
+
         entry_points.add_entry_point(mint);
         entry_points.add_entry_point(balance);
+        entry_points.add_entry_point(updateOwner);
         //entry_points.add_entry_point(burn);
-        //entry_points.add_entry_point(updateOwner);
 
         entry_points
     };
@@ -250,6 +261,11 @@ pub extern "C" fn call() {
         // Warning: if key exists on different contract, deploy will fail ? to be investigated.
         let balances_dict = storage::new_dictionary("holdings").unwrap_or_revert();
         named_keys.insert("holdings".to_string(), balances_dict.into());
+
+        let owner_account: URef = storage::new_uref("owner");
+        named_keys.insert("owner".to_string(), owner_account.into());
+        let owner_value: AccountHash = runtime::get_caller();
+        storage::write(owner_account, owner_value);
 
         let circulating_supply = storage::new_uref("circ");
         named_keys.insert("circ".to_string(), circulating_supply.into());
@@ -267,7 +283,7 @@ pub extern "C" fn call() {
     storage::new_contract(
         entry_points,
         Some(named_keys),
-        Some("JCT_m_v.0.0.5".to_string()),
+        Some("JCT_val_v.0.0.1".to_string()),
         Some("access_key".to_string()),
     );
 }
