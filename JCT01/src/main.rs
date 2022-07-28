@@ -160,39 +160,44 @@ pub extern "C" fn mint() {
     storage::write(circulating_supply_uref, updated_circulating_supply);
 }
 
-// Fully functional.
-/*#[no_mangle]
+#[no_mangle]
 pub extern "C" fn burn() {
-    // Account
-    let caller_account_hash: AccountHash = runtime::get_caller();
-    let caller_account_hash_as_string = caller_account_hash.to_string();
+    let burn_amount: u64 = 10;
 
-    let circulating_supply_uref: URef = get_uref("circulating_supply");
+    // TBD: move Uref conversion into a function if possible.
+    let balances_key: Key = match runtime::get_key("holdings") {
+        Some(key) => key,
+        None => runtime::revert(ApiError::MissingKey),
+    };
+    // balances dictionary UREF
+    let balances_uref: URef = balances_key.into_uref().unwrap_or_revert();
+    let circulating_supply_uref: URef = match runtime::get_key("circ") {
+        Some(uref) => uref,
+        None => runtime::revert(ApiError::MissingKey),
+    }
+    .into_uref()
+    .unwrap_or_revert();
+    // circulating supply
     let circulating_supply: u64 = storage::read_or_revert(circulating_supply_uref);
-    let max_total_supply_uref: URef = get_uref("max_total_supply");
-    let max_total_supply: u64 = storage::read_or_revert(max_total_supply_uref);
-    // To be parsed as a runtime arg later.
-    let burn_amount: u64 = 25; // burn 25 tokens
-    let balances_uref = get_uref("holdings");
 
+    let caller_account_hash = runtime::get_caller();
+    let caller_account_hash_as_string = caller_account_hash.to_string();
+    // Account Balance before burn.
     let balance_before_burn: u64 = Balance(caller_account_hash, &caller_account_hash_as_string);
-    if balance_before_burn < burn_amount {
-        runtime::revert(ApiError::InvalidArgument)
+    if balance_before_burn - burn_amount < 0 {
+        runtime::revert(ApiError::PermissionDenied); // incorrect ApiError, create one for balance too low.
     }
     let balance_after_burn: u64 = balance_before_burn - burn_amount;
-    let updated_circulating_supply: u64 = circulating_supply - burn_amount;
-
-    // Update Balance first to prevent multiple execution attacks.
     storage::dictionary_put(
         balances_uref,
         &caller_account_hash_as_string,
         balance_after_burn,
     );
-    // now decrease circulating_supply
+
+    let updated_circulating_supply: u64 = circulating_supply - burn_amount;
     storage::write(circulating_supply_uref, updated_circulating_supply);
-    // nothing
 }
-*/
+
 #[no_mangle]
 // this can only be called by another contract and does not return a value to the cli.
 pub extern "C" fn balanceOf() -> u64 {
@@ -236,22 +241,18 @@ pub extern "C" fn call() {
             EntryPointType::Contract,
         );
 
-        /*
-                let burn = EntryPoint::new(
-                    "burn",
-                    vec![],
-                    CLType::Unit,
-                    EntryPointAccess::Public,
-                    EntryPointType::Contract,
-                );
-
-        */
+        let burn = EntryPoint::new(
+            "burn",
+            vec![],
+            CLType::Unit,
+            EntryPointAccess::Public,
+            EntryPointType::Contract,
+        );
 
         entry_points.add_entry_point(mint);
         entry_points.add_entry_point(balance);
         entry_points.add_entry_point(updateOwner);
-        //entry_points.add_entry_point(burn);
-
+        entry_points.add_entry_point(burn);
         entry_points
     };
 
