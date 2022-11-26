@@ -1,8 +1,9 @@
-The Token standard is in JCT01/src/main.rs
-The script for local tests is in tests/src/main.rs
-
-To run the test script:
-cd tests
-./build.sh
-./ptest.sh        # when using println in test script (my current default)
-cargo test        # when using assert! in test script
+# Jonas Casper Token
+Simple token with standard functions 
+- Mint
+- Burn
+- Transfer
+... \
+built on Casper. \
+My first Casper Smart Contract for educational purposes. \
+I use this as a reference template to setup new contracts.
